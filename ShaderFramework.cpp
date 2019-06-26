@@ -33,12 +33,13 @@ ID3DXFont*              gpFont			= NULL;
 // 모델
 LPD3DXMESH				gpSphere			= NULL;
 // 쉐이더
-LPD3DXEFFECT			gpColorShader	 = NULL;
+LPD3DXEFFECT			gpTextureMappingShader	 = NULL;
 // 텍스처
-
+LPDIRECT3DTEXTURE9		gpEarthDM		= NULL;
 // 프로그램 이름
 const char*				gAppName		= "초간단 쉐이더 데모 프레임워크";
-
+// 변수
+float					gRotationY		= 0.0f;
 
 //-----------------------------------------------------------------------
 // 프로그램 진입점/메시지 루프
@@ -164,6 +165,12 @@ void RenderFrame()
 // 3D 물체등을 그린다.
 void RenderScene()
 {
+	gRotationY += 0.4f * PI / 180.0f;
+	if (gRotationY > 2 * PI)
+	{
+		gRotationY -= 2 * PI;
+	}
+
 	//뷰행렬 만들기
 	D3DXMATRIXA16 matView;
 	D3DXVECTOR3 vEyePt(0.0f, 0.0f, -200.0f);
@@ -177,26 +184,27 @@ void RenderScene()
 
 	//월드 행렬 만들기
 	D3DXMATRIXA16 matWorld;
-	D3DXMatrixIdentity(&matWorld);
+	D3DXMatrixRotationX(&matWorld, gRotationY);
 
+	
 	//셰이더 전역변수들을 설정
-	gpColorShader->SetMatrix("gWolrdMatrix", &matWorld);
-	gpColorShader->SetMatrix("gViewMatrix", &matView);
-	gpColorShader->SetMatrix("gProjectionMatrix", &matProjection);
-
+	gpTextureMappingShader->SetMatrix("gWorldMatrix", &matWorld);
+	gpTextureMappingShader->SetMatrix("gViewMatrix", &matView);
+	gpTextureMappingShader->SetMatrix("gProjectionMatrix", &matProjection);
+	gpTextureMappingShader->SetTexture("DiffuseMap_Tex", gpEarthDM);
 	UINT numPasses = 0;
-	gpColorShader->Begin(&numPasses, NULL);
+	gpTextureMappingShader->Begin(&numPasses, NULL);
 	{
 		for (UINT i = 0; i < numPasses; ++i)
 		{
-			gpColorShader->BeginPass(i);
+			gpTextureMappingShader->BeginPass(i);
 			{
 				gpSphere->DrawSubset(0);
 			}
-			gpColorShader->EndPass();
+			gpTextureMappingShader->EndPass();
 		}
 	}
-	gpColorShader->End();
+	gpTextureMappingShader->End();
 }
 
 // 디버그 정보 등을 출력.
@@ -287,10 +295,14 @@ bool InitD3D(HWND hWnd)
 bool LoadAssets()
 {
 	// 텍스처 로딩
-	
+	gpEarthDM = LoadTexture("Earth.jpg");
+	if (!gpEarthDM)
+	{
+		return false;
+	}
 	// 쉐이더 로딩
-	gpColorShader = LoadShader("ColorShader.fx");
-	if (!gpColorShader)
+	gpTextureMappingShader = LoadShader("TextureMapping.fx");
+	if (!gpTextureMappingShader)
 	{
 		return false;
 	}
@@ -384,13 +396,17 @@ void Cleanup()
 		gpSphere = NULL;
 	}
 	// 쉐이더를 release 한다.
-	if (gpColorShader)
+	if (gpTextureMappingShader)
 	{
-		gpColorShader->Release();
-		gpColorShader = NULL;
+		gpTextureMappingShader->Release();
+		gpTextureMappingShader = NULL;
 	}
 	// 텍스처를 release 한다.
-
+	if (gpEarthDM)
+	{
+		gpEarthDM->Release();
+		gpEarthDM = NULL;
+	}
 	// D3D를 release 한다.
     if(gpD3DDevice)
 	{
