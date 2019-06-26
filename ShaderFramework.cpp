@@ -16,6 +16,11 @@
 
 //----------------------------------------------------------------------
 // 전역변수
+#define PI						3.14159265f
+#define FOV						(PI /4.0f)						// 시야각
+#define ASPECT_RATIO			(WIN_WIDTH/(float)WIN_HEIGHT)	// 화면의 종횡비
+#define NEAR_PLANE				1								// 근접 평면
+#define FAR_PLANE				10000							// 원거리 평면
 //----------------------------------------------------------------------
 
 // D3D 관련
@@ -26,9 +31,9 @@ LPDIRECT3DDEVICE9       gpD3DDevice		= NULL;				// D3D 장치
 ID3DXFont*              gpFont			= NULL;
 
 // 모델
-
+LPD3DXMESH				gpSphere			= NULL;
 // 쉐이더
-
+LPD3DXEFFECT			gpColorShader	 = NULL;
 // 텍스처
 
 // 프로그램 이름
@@ -141,7 +146,7 @@ void Update()
 
 void RenderFrame()
 {
-	D3DCOLOR bgColour = 0xFF0000FF;	// 배경색상 - 파랑
+	D3DCOLOR bgColour = 0xFFFF0000;	// 배경색상 - 파랑
 
     gpD3DDevice->Clear( 0, NULL, (D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER), bgColour, 1.0f, 0 );
 
@@ -159,6 +164,39 @@ void RenderFrame()
 // 3D 물체등을 그린다.
 void RenderScene()
 {
+	//뷰행렬 만들기
+	D3DXMATRIXA16 matView;
+	D3DXVECTOR3 vEyePt(0.0f, 0.0f, -200.0f);
+	D3DXVECTOR3 vLookatPt(0.0f, 0.0f, 0.0f);
+	D3DXVECTOR3 vUpVec(0.0f, 1.0f, 0.0f);
+	D3DXMatrixLookAtLH(&matView, &vEyePt, &vLookatPt, &vUpVec);
+
+	//투형행렬 만들기
+	D3DXMATRIXA16 matProjection;
+	D3DXMatrixPerspectiveFovLH(&matProjection, FOV, ASPECT_RATIO, NEAR_PLANE, FAR_PLANE);
+
+	//월드 행렬 만들기
+	D3DXMATRIXA16 matWorld;
+	D3DXMatrixIdentity(&matWorld);
+
+	//셰이더 전역변수들을 설정
+	gpColorShader->SetMatrix("gWolrdMatrix", &matWorld);
+	gpColorShader->SetMatrix("gViewMatrix", &matView);
+	gpColorShader->SetMatrix("gProjectionMatrix", &matProjection);
+
+	UINT numPasses = 0;
+	gpColorShader->Begin(&numPasses, NULL);
+	{
+		for (UINT i = 0; i < numPasses; ++i)
+		{
+			gpColorShader->BeginPass(i);
+			{
+				gpSphere->DrawSubset(0);
+			}
+			gpColorShader->EndPass();
+		}
+	}
+	gpColorShader->End();
 }
 
 // 디버그 정보 등을 출력.
@@ -249,11 +287,19 @@ bool InitD3D(HWND hWnd)
 bool LoadAssets()
 {
 	// 텍스처 로딩
-
+	
 	// 쉐이더 로딩
-
+	gpColorShader = LoadShader("ColorShader.fx");
+	if (!gpColorShader)
+	{
+		return false;
+	}
 	// 모델 로딩
-
+	gpSphere = LoadModel("sphere.x");
+	if (!gpSphere)
+	{
+		return false;
+	}
 	return true;
 }
 
@@ -332,9 +378,17 @@ void Cleanup()
 	}
 
 	// 모델을 release 한다.
-
+	if (gpSphere)
+	{
+		gpSphere->Release();
+		gpSphere = NULL;
+	}
 	// 쉐이더를 release 한다.
-
+	if (gpColorShader)
+	{
+		gpColorShader->Release();
+		gpColorShader = NULL;
+	}
 	// 텍스처를 release 한다.
 
 	// D3D를 release 한다.
