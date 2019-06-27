@@ -33,17 +33,15 @@ ID3DXFont*              gpFont			= NULL;
 // 모델
 LPD3DXMESH				gpSphere			= NULL;
 // 쉐이더
-LPD3DXEFFECT			gpSpecularMappingShader	 = NULL;
+LPD3DXEFFECT			gpToonShader	 = NULL;
 // 텍스처
-LPDIRECT3DTEXTURE9		gpStoneDM		= NULL;
-LPDIRECT3DTEXTURE9		gpStoneSM		= NULL;
+
 // 프로그램 이름
 const char*				gAppName		= "초간단 쉐이더 데모 프레임워크";
 // 변수
 float					gRotationY		= 0.0f;
 D3DXVECTOR4				gWorldLightPosition(500.0f, 500.0f, -500.0f, 1.0f);
-D3DXVECTOR4				gWorldCameraPosition(0.0f, 0.0f, -200.0f, 1.0f);
-D3DXVECTOR4				gLightColor(0.7f, 0.7f, 1.0f, 1.0f);
+D3DXVECTOR4				gSurfaceColor(0, 1, 0, 1);
 //-----------------------------------------------------------------------
 // 프로그램 진입점/메시지 루프
 //-----------------------------------------------------------------------
@@ -173,10 +171,10 @@ void RenderScene()
 	{
 		gRotationY -= 2 * PI;
 	}
-
+	
 	//뷰행렬 만들기
 	D3DXMATRIXA16 matView;
-	D3DXVECTOR3 vEyePt(gWorldCameraPosition.x, gWorldCameraPosition.y, gWorldCameraPosition.z);
+	D3DXVECTOR3 vEyePt(0.0f, 0.0f, -200.0f);
 	D3DXVECTOR3 vLookatPt(0.0f, 0.0f, 0.0f);
 	D3DXVECTOR3 vUpVec(0.0f, 1.0f, 0.0f);
 	D3DXMatrixLookAtLH(&matView, &vEyePt, &vLookatPt, &vUpVec);
@@ -186,34 +184,39 @@ void RenderScene()
 	D3DXMatrixPerspectiveFovLH(&matProjection, FOV, ASPECT_RATIO, NEAR_PLANE, FAR_PLANE);
 
 	//월드 행렬 만들기
+
 	D3DXMATRIXA16 matWorld;
 	D3DXMatrixRotationX(&matWorld, gRotationY);
 
+	D3DXMATRIXA16 matInvWorld;
+	D3DXMatrixTranspose(&matInvWorld, &matWorld);
+
+	D3DXMATRIXA16 matWorldView;
+	D3DXMATRIXA16 matWorldViewProjection;
+	D3DXMatrixMultiply(&matWorldView,&matWorld, &matView);
+	D3DXMatrixMultiply(&matWorldViewProjection, &matWorldView, &matProjection);
+
 	
 	//셰이더 전역변수들을 설정
-	gpSpecularMappingShader->SetMatrix("gWorldMatrix", &matWorld);
-	gpSpecularMappingShader->SetMatrix("gViewMatrix", &matView);
-	gpSpecularMappingShader->SetMatrix("gProjectionMatrix", &matProjection);
+	gpToonShader->SetMatrix("gWorldViewProjectionMatrix", &matWorldViewProjection);
+	gpToonShader->SetMatrix("gInvWorldMatrix", &matInvWorld);
 
-	gpSpecularMappingShader->SetVector("gWorldLightPosition", &gWorldLightPosition);
-	gpSpecularMappingShader->SetVector("gWorldCameraPosition", &gWorldCameraPosition);
-	gpSpecularMappingShader->SetVector("gLightColor", &gLightColor);
+	gpToonShader->SetVector("gWorldLightPosition", &gWorldLightPosition);
+	gpToonShader->SetVector("gSurfaceColor", &gSurfaceColor);
 
-	gpSpecularMappingShader->SetTexture("DiffuseMap_Tex", gpStoneDM);
-	gpSpecularMappingShader->SetTexture("SpecularMap_Tex", gpStoneSM);
 	UINT numPasses = 0;
-	gpSpecularMappingShader->Begin(&numPasses, NULL);
+	gpToonShader->Begin(&numPasses, NULL);
 	{
 		for (UINT i = 0; i < numPasses; ++i)
 		{
-			gpSpecularMappingShader->BeginPass(i);
+			gpToonShader->BeginPass(i);
 			{
 				gpSphere->DrawSubset(0);
 			}
-			gpSpecularMappingShader->EndPass();
+			gpToonShader->EndPass();
 		}
 	}
-	gpSpecularMappingShader->End();
+	gpToonShader->End();
 }
 
 // 디버그 정보 등을 출력.
@@ -304,24 +307,15 @@ bool InitD3D(HWND hWnd)
 bool LoadAssets()
 {
 	// 텍스처 로딩
-	gpStoneDM = LoadTexture("Fieldstone.tga");
-	if (!gpStoneDM)
-	{
-		return false;
-	}
-	gpStoneSM = LoadTexture("fieldstone_SM.tga");
-	if (!gpStoneSM)
-	{
-		return false;
-	}
+	
 	// 쉐이더 로딩
-	gpSpecularMappingShader = LoadShader("SpecularMapping.fx");
-	if (!gpSpecularMappingShader)
+	gpToonShader = LoadShader("ToonShader.fx");
+	if (!gpToonShader)
 	{
 		return false;
 	}
 	// 모델 로딩
-	gpSphere = LoadModel("sphere1.x");
+	gpSphere = LoadModel("Teapot.x");
 	if (!gpSphere)
 	{
 		return false;
@@ -410,23 +404,12 @@ void Cleanup()
 		gpSphere = NULL;
 	}
 	// 쉐이더를 release 한다.
-	if (gpSpecularMappingShader)
+	if (gpToonShader)
 	{
-		gpSpecularMappingShader->Release();
-		gpSpecularMappingShader = NULL;
+		gpToonShader->Release();
+		gpToonShader = NULL;
 	}
-	// 텍스처를 release 한다.
-	if (gpStoneDM)
-	{
-		gpStoneDM->Release();
-		gpStoneDM = NULL;
-	}
-
-	if (gpStoneSM)
-	{
-		gpStoneSM->Release();
-		gpStoneSM = NULL;
-	}
+	
 	// D3D를 release 한다.
     if(gpD3DDevice)
 	{
